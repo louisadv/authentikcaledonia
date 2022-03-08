@@ -198,6 +198,148 @@ class AccountInvoiceInherit(models.Model):
             if in_draft_mode:
                 taxes_map_entry['tax_line'].update(taxes_map_entry['tax_line']._get_fields_onchange_balance(force_computation=True))
 
+    @api.model
+    def _prepare_tax_lines_data_for_totals_from_object(self, object_lines, tax_results_function, margin_percent):
+        """ Prepares data to be passed as tax_lines_data parameter of _get_tax_totals() from any
+            object using taxes. This helper is intended for purchase.order and sale.order, as a common
+            function centralizing their behavior.
 
+            :param object_lines: A list of records corresponding to the sub-objects generating the tax totals
+                                 (sale.order.line or purchase.order.line, for example)
+
+            :param tax_results_function: A function to be called to get the results of the tax computation for a
+                                         line in object_lines. It takes the object line as its only parameter
+                                         and returns a dict in the same format as account.tax's compute_all
+                                         (most probably after calling it with the right parameters).
+
+            :return: A list of dict in the format described in _get_tax_totals's tax_lines_data's docstring.
+        """
+        tax_lines_data = []
+
+        for line in object_lines:
+            tax_results = tax_results_function(line)
+            for tax_result in tax_results['taxes']:
+                current_tax = self.env['account.tax'].browse(tax_result['id'])
+
+                # Tax line
+                tax_lines_data.append({
+                    'line_key': f"tax_line_{line.id}_{tax_result['id']}",
+                    # *****************Adv******************************
+                    'tax_amount': tax_result['amount'] * margin_percent,
+                    # *****************Adv******************************
+                    'tax': current_tax,
+                })
+
+                # Base for this tax line
+                tax_lines_data.append({
+                    'line_key': 'base_line_%s' % line.id,
+                    'base_amount': tax_results['total_excluded'],
+                    'tax': current_tax,
+                })
+
+                # Base for the taxes whose base is affected by this tax line
+                if tax_result['tax_ids']:
+                    affected_taxes = self.env['account.tax'].browse(tax_result['tax_ids'])
+                    for affected_tax in affected_taxes:
+                        tax_lines_data.append({
+                            'line_key': 'affecting_base_line_%s_%s' % (line.id, tax_result['id']),
+                            'base_amount': tax_result['amount'],
+                            'tax': affected_tax,
+                            'tax_affecting_base': current_tax,
+                        })
+
+        return tax_lines_data
+
+    @api.model
+    def _get_tax_totals(self, partner, tax_lines_data, amount_total, amount_untaxed, currency):
+        # *****************Adv******************************
+        totalTax = 0
+        for line in tax_lines_data:
+            try:
+                totalTax = totalTax + line['tax_amount']
+            except:
+                print("")
+        amount_total = amount_untaxed + totalTax
+        # *****************Adv******************************
+
+        lang_env = self.with_context(lang=partner.lang).env
+        account_tax = self.env['account.tax']
+
+        grouped_taxes = defaultdict(
+            lambda: defaultdict(lambda: {'base_amount': 0.0, 'tax_amount': 0.0, 'base_line_keys': set()}))
+        subtotal_priorities = {}
+        for line_data in tax_lines_data:
+            tax_group = line_data['tax'].tax_group_id
+
+            # Update subtotals priorities
+            if tax_group.preceding_subtotal:
+                subtotal_title = tax_group.preceding_subtotal
+                new_priority = tax_group.sequence
+            else:
+                # When needed, the default subtotal is always the most prioritary
+                subtotal_title = _("Untaxed Amount")
+                new_priority = 0
+
+            if subtotal_title not in subtotal_priorities or new_priority < subtotal_priorities[subtotal_title]:
+                subtotal_priorities[subtotal_title] = new_priority
+
+            # Update tax data
+            tax_group_vals = grouped_taxes[subtotal_title][tax_group]
+
+            if 'base_amount' in line_data:
+                # Base line
+                if tax_group == line_data.get('tax_affecting_base', account_tax).tax_group_id:
+                    # In case the base has a tax_line_id belonging to the same group as the base tax,
+                    # the base for the group will be computed by the base tax's original line (the one with tax_ids and no tax_line_id)
+                    continue
+
+                if line_data['line_key'] not in tax_group_vals['base_line_keys']:
+                    # If the base line hasn't been taken into account yet, at its amount to the base total.
+                    tax_group_vals['base_line_keys'].add(line_data['line_key'])
+                    tax_group_vals['base_amount'] += line_data['base_amount']
+
+            else:
+                # Tax line
+                tax_group_vals['tax_amount'] += line_data['tax_amount']
+
+        # Compute groups_by_subtotal
+        groups_by_subtotal = {}
+        for subtotal_title, groups in grouped_taxes.items():
+            groups_vals = [{
+                'tax_group_name': group.name,
+                'tax_group_amount': amounts['tax_amount'],
+                'tax_group_base_amount': amounts['base_amount'],
+                'formatted_tax_group_amount': formatLang(lang_env, amounts['tax_amount'], currency_obj=currency),
+                'formatted_tax_group_base_amount': formatLang(lang_env, amounts['base_amount'], currency_obj=currency),
+                'tax_group_id': group.id,
+                'group_key': '%s-%s' % (subtotal_title, group.id),
+            } for group, amounts in sorted(groups.items(), key=lambda l: l[0].sequence)]
+
+            groups_by_subtotal[subtotal_title] = groups_vals
+
+        # Compute subtotals
+        subtotals_list = []  # List, so that we preserve their order
+        previous_subtotals_tax_amount = 0
+        for subtotal_title in sorted((sub for sub in subtotal_priorities), key=lambda x: subtotal_priorities[x]):
+            subtotal_value = amount_untaxed + previous_subtotals_tax_amount
+            subtotals_list.append({
+                'name': subtotal_title,
+                'amount': subtotal_value,
+                'formatted_amount': formatLang(lang_env, subtotal_value, currency_obj=currency),
+            })
+
+            subtotal_tax_amount = sum(group_val['tax_group_amount'] for group_val in groups_by_subtotal[subtotal_title])
+            previous_subtotals_tax_amount += subtotal_tax_amount
+
+        # Assign json-formatted result to the field
+        return {
+            'amount_total': amount_total,
+            'amount_untaxed': amount_untaxed,
+            'formatted_amount_total': formatLang(lang_env, amount_total, currency_obj=currency),
+            'formatted_amount_untaxed': formatLang(lang_env, amount_untaxed, currency_obj=currency),
+            'groups_by_subtotal': groups_by_subtotal,
+            'subtotals': subtotals_list,
+            'allow_tax_edition': False,
+        }
 
 
