@@ -6,7 +6,7 @@
         Module pour calculer le TGC à partir de la marge""",
 
     'description': """
-        Module pour calculer le TGC à partir de la marge
+        Module pour calculer le TGC (6% de la marge)
     """,
 
     'author': "Advences",
