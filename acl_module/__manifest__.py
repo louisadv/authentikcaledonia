@@ -3,11 +3,10 @@
     'name': "adv_booking",
 
     'summary': """
-        Short (1 phrase/line) summary of the module's purpose, used as
-        subtitle on modules listing or apps.openerp.com""",
+        Module pour calculer le TGC à partir de la marge""",
 
     'description': """
-        Long description of module's purpose
+        Module pour calculer le TGC à partir de la marge
     """,
 
     'author': "Advences",
