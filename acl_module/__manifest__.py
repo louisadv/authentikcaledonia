@@ -3,15 +3,14 @@
     'name': "adv_booking",
 
     'summary': """
-        Short (1 phrase/line) summary of the module's purpose, used as
-        subtitle on modules listing or apps.openerp.com""",
+        Module pour calculer le TGC à partir de la marge""",
 
     'description': """
-        Long description of module's purpose
+        Module pour calculer le TGC (6% de la marge)
     """,
 
-    'author': "My Company",
-    'website': "http://www.yourcompany.com",
+    'author': "Advences",
+    'website': "https://www.advences.com",
 
     # Categories can be used to filter modules in modules listing
     # Check https://github.com/odoo/odoo/blob/14.0/odoo/addons/base/data/ir_module_category_data.xml
@@ -32,4 +31,5 @@
     'demo': [
         'demo/demo.xml',
     ],
+    'license': 'AGPL-3'
 }
