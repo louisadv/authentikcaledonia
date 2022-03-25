@@ -28,7 +28,7 @@ class PurchaseOrder(models.Model):
 
         account_move = self.env['account.move']
         for order in self:
-            tax_lines_data = account_move._prepare_tax_lines_data_for_totals_from_object(order.order_line, compute_taxes, 1)
+            tax_lines_data = account_move._prepare_tax_lines_data_for_totals_from_object(order.order_line, compute_taxes, 1.0)
             tax_totals = account_move._get_tax_totals(order.partner_id, tax_lines_data, order.amount_total,
                                                       order.amount_untaxed, order.currency_id)
             order.tax_totals_json = json.dumps(tax_totals)
