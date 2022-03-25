@@ -66,6 +66,8 @@ class AccountInvoiceInherit(models.Model):
             sale_line_ids = base_line.mapped('sale_line_ids')
             if sale_line_ids:
                 margin_percent = sale_line_ids[0].order_id.margin_percent
+            else:
+                margin_percent = 1.0
 
             price_unit_wo_discount = price_unit_wo_discount * margin_percent
             #*********************** Fin Advences ***********************************************#
