@@ -66,6 +66,8 @@ class AccountInvoiceInherit(models.Model):
             sale_line_ids = base_line.mapped('sale_line_ids')
             if sale_line_ids:
                 margin_percent = sale_line_ids[0].order_id.margin_percent
+            else:
+                margin_percent = 1.0
 
             price_unit_wo_discount = price_unit_wo_discount * margin_percent
             #*********************** Fin Advences ***********************************************#
@@ -199,7 +201,7 @@ class AccountInvoiceInherit(models.Model):
                 taxes_map_entry['tax_line'].update(taxes_map_entry['tax_line']._get_fields_onchange_balance(force_computation=True))
 
     @api.model
-    def _prepare_tax_lines_data_for_totals_from_object(self, object_lines, tax_results_function, margin_percent):
+    def _prepare_tax_lines_data_for_totals_from_object(self, object_lines, tax_results_function, margin_percent=1):
         """ Prepares data to be passed as tax_lines_data parameter of _get_tax_totals() from any
             object using taxes. This helper is intended for purchase.order and sale.order, as a common
             function centralizing their behavior.
