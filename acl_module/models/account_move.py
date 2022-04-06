@@ -318,7 +318,7 @@ class AccountInvoiceInherit(models.Model):
             } for group, amounts in sorted(groups.items(), key=lambda l: l[0].sequence)]
 
             groups_by_subtotal[subtotal_title] = groups_vals
-
+    
         # Compute subtotals
         subtotals_list = []  # List, so that we preserve their order
         previous_subtotals_tax_amount = 0
@@ -343,5 +343,6 @@ class AccountInvoiceInherit(models.Model):
             'subtotals': subtotals_list,
             'allow_tax_edition': False,
         }
+    amount_tax_signed = fields.Monetary(string='TGC', store=True, readonly=True, compute='_compute_amount', currency_field='company_currency_id')
 
 
