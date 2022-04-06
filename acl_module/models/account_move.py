@@ -17,7 +17,6 @@ import re
 import warnings
 import logging
 
-
 class AccountInvoiceInherit(models.Model):
     _inherit = 'account.move'
     
